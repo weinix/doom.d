@@ -22,7 +22,7 @@
 (use-package! org-gtd
   :after org
   :init
-  (setq org-gtd-update-ack "3.0.0")
+  (setq org-gtd-update-ack "4.0.0")
   :config
   (setq org-edna-use-inheritance t)
   (org-edna-mode)
