@@ -31,7 +31,7 @@ untracked =config.local.el= instead (see [[*Machine-local overrides]]).
 
 #+begin_src emacs-lisp
 (setq doom-theme 'zaiste)
-(setq display-line-numbers-type 'relative)
+(setq display-line-numbers-type 't)
 #+end_src
 
 ** Fonts
@@ -214,4 +214,56 @@ It loads last so it can override everything above.
 (let ((local (expand-file-name "config.local.el" doom-user-dir)))
   (when (file-exists-p local)
     (load local)))
+#+end_src
+* kitty image support over ssh
+#+begin_src emacs-lisp
+;; Kitty graphics + Evil in `emacs -nw'.
+;;
+;; Graphics setup must run after kkp's async Kitty Keyboard Protocol handshake
+;; on `tty-setup-hook' (kitty-graphics.el issue #33); otherwise partial kkp setup
+;; breaks modifiers and motion keys session-wide.
+(defun my/kitty-graphics-setup-safe ()
+  (unless (bound-and-true-p my/kitty-graphics-setup-done)
+    (setq my/kitty-graphics-setup-done t)
+    (require 'kitty-graphics)
+    (kitty-graphics-setup)))
+
+(with-eval-after-load 'kkp
+  (add-hook 'kkp-terminal-setup-complete-hook #'my/kitty-graphics-setup-safe))
+
+;; Fallback when kkp never completes (slow SSH, probing timeout).
+(run-with-idle-timer
+ 2 nil
+ (lambda ()
+   (unless (bound-and-true-p my/kitty-graphics-setup-done)
+     (my/kitty-graphics-setup-safe))))
+
+(use-package! kitty-graphics
+  :if (not (display-graphic-p))
+  :defer t)
+
+;; kitty-graphics replaces `image-mode' with `kitty-graphics-image-mode' and
+;; uses `special-mode-map'; evil-collection does not cover either mode, so Evil
+;; stays in emacs state and h/j/k/l stop working until you force normal state.
+(after! evil
+  (evil-set-initial-state 'kitty-graphics-image-mode 'normal)
+  (evil-set-initial-state 'kitty-graphics-browser-mode 'normal))
+#+end_src
+
+* Graphviz Dot and PlantUML execution
+#+begin_src emacs-lisp
+(after! org
+  ;; Enable Graphviz DOT and PlantUML execution.
+  (org-babel-do-load-languages
+   'org-babel-load-languages
+   '((dot . t)
+     (plantuml . t)))
+
+  ;; Use the installed PlantUML executable.
+  (setq org-plantuml-exec-mode 'plantuml
+        org-plantuml-executable-path
+        (or (executable-find "plantuml") "plantuml"))
+
+  ;; Keep diagram output reasonably sized.
+  (setq org-image-actual-width 500))
 #+end_src

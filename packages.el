@@ -8,3 +8,8 @@
 
 ;; Grouped agenda view (Today / Due today / Important / Overdue / Due soon).
 (package! org-super-agenda)
+
+;;  kitty image support
+(package! kitty-graphics
+  :recipe (:host github
+           :repo "cashmeredev/kitty-graphics.el"))

@@ -58,6 +58,9 @@
        (sh +lsp)
        yaml
 
+       :os
+       (tty +osc)                       ; OSC-52 clipboard in terminal (SSH/tmux)
+
        :config
        literate                         ; tangle config.org -> config.el on save and sync
        (default +bindings +smartparens))
