@@ -1,0 +1,3 @@
+# Machine-local and personal settings (identity, per-host tweaks)
+config.local.el
+custom.el

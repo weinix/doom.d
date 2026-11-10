@@ -1,0 +1,217 @@
+#+TITLE: Doom Emacs config
+#+STARTUP: overview
+
+This is a literate Doom Emacs config. Every =emacs-lisp= block in this file is
+tangled into [[file:config.el][config.el]], which Doom loads at startup. Doom's =:config literate=
+module re-tangles it whenever this file is saved and before every ~doom sync~.
+
+Never edit =config.el= by hand: the next tangle overwrites it. It is committed
+anyway, so a fresh machine works before anything has been tangled, and so
+=git diff= shows what a change to this file actually does to the generated code.
+
+=init.el= (module list) and =packages.el= (extra packages) stay as plain elisp:
+Doom reads them before this file is tangled.
+
+* Header
+The header line turns on lexical binding in the generated file.
+
+#+begin_src emacs-lisp
+;;; config.el -*- lexical-binding: t; -*-
+;; GENERATED from config.org by Doom's :config literate module. Do not edit.
+#+end_src
+
+* Identity
+Nothing personal is kept in this repo. Emacs falls back to the system user's
+full name and =$EMAIL=; set =user-full-name= and =user-mail-address= in the
+untracked =config.local.el= instead (see [[*Machine-local overrides]]).
+
+* UI
+** Theme and line numbers
+=zaiste= is a light theme (Bluloco-inspired) from [[file:themes/zaiste-theme.el][themes/zaiste-theme.el]].
+
+#+begin_src emacs-lisp
+(setq doom-theme 'zaiste)
+(setq display-line-numbers-type 'relative)
+#+end_src
+
+** Fonts
+A light-weight monospace nerd font for code and a serif for prose. The big
+font is what =SPC t b= switches to for presenting.
+
+#+begin_src emacs-lisp
+(setq doom-font (font-spec :family "JetBrainsMono Nerd Font" :size 18 :weight 'light)
+      doom-variable-pitch-font (font-spec :family "Noto Serif" :size 13))
+(setq doom-big-font (font-spec :family "JetBrainsMono Nerd Font" :size 28 :weight 'light))
+#+end_src
+
+* Shell and projects
+#+begin_src emacs-lisp
+(setq explicit-shell-file-name "/bin/zsh"
+      shell-file-name "zsh")
+
+(setq projectile-project-search-path '("~/workspace/"))
+#+end_src
+
+* Dired
+With two dired windows open, copy and move default to the other window's
+directory.
+
+There is deliberately no ~global-auto-revert-mode~: Doom's
+~doom-auto-revert-mode~ already reverts on buffer/window switch and after save,
+and the global mode disables it. Its timer polling also reverts doc-view PDFs
+mid-export, leaking doc-view refresh timers.
+
+#+begin_src emacs-lisp
+(setq dired-dwim-target t)
+#+end_src
+
+* Org
+** Directories and agenda
+#+begin_src emacs-lisp
+(setq org-directory "~/workspace/org/")
+(after! org
+  (setq org-agenda-files '("~/gtd" "~/workspace/org/")))
+#+end_src
+
+** GTD
+[[https://github.com/Trevoke/org-gtd.el][org-gtd]] implements inbox → clarify → organize → engage, with org-edna for
+dependency inheritance between tasks. Its commands live under =SPC d=.
+
+=org-gtd-update-ack= acknowledges the installed 3.0.0 upgrade notes; it must be
+set before the package loads, hence =:init=.
+
+#+begin_src emacs-lisp
+(use-package! org-gtd
+  :after org
+  :init
+  (setq org-gtd-update-ack "3.0.0")
+  :config
+  (setq org-edna-use-inheritance t)
+  (org-edna-mode)
+  (map! :leader
+        (:prefix ("d" . "org-gtd")
+         :desc "Capture"        "c" #'org-gtd-capture
+         :desc "Engage"         "e" #'org-gtd-engage
+         :desc "Process inbox"  "p" #'org-gtd-process-inbox
+         :desc "Show all next"  "n" #'org-gtd-show-all-next
+         :desc "Stuck projects" "s" #'org-gtd-review-stuck-projects))
+  (map! :map org-gtd-clarify-map
+        :desc "Organize this item" "C-c c" #'org-gtd-organize))
+#+end_src
+
+** Look
+Graduated heading sizes on top of the =+pretty= flag (org-modern). Heights are
+multiples of =doom-font=. org-modern's bullets scale with the heading, so each
+level is visibly distinct.
+
+#+begin_src emacs-lisp
+(custom-set-faces!
+  '(org-document-title :height 1.6 :weight bold)
+  '(org-level-1 :inherit outline-1 :height 1.35)
+  '(org-level-2 :inherit outline-2 :height 1.25)
+  '(org-level-3 :inherit outline-3 :height 1.15)
+  '(org-level-4 :inherit outline-4 :height 1.08)
+  '(org-level-5 :inherit outline-5 :height 1.0))
+#+end_src
+
+Keep a bullet at every level, replacing the stars rather than folding them away.
+Tables stay plain: org-modern's drawn borders misalign with a nerd font.
+
+#+begin_src emacs-lisp
+(after! org-modern
+  (setq org-modern-hide-stars nil
+        org-modern-star 'replace
+        org-modern-table nil))
+#+end_src
+
+Serif body text in org (from =:ui zen=); code and tables stay monospace.
+
+#+begin_src emacs-lisp
+(add-hook 'org-mode-hook #'mixed-pitch-mode)
+#+end_src
+
+** Tasks, images and capture
+- Finishing a task stamps a =CLOSED= time.
+- Screenshots (=SPC m a c= / =SPC m a p= via =:lang org +dragndrop=) show inline
+  on open, capped at 600px; =#+ATTR_ORG: :width= overrides per image.
+- A journal capture template (=j=) keeps a dated notes stream, separate from the
+  org-gtd inbox.
+
+#+begin_src emacs-lisp
+(after! org
+  (setq org-log-done 'time
+        org-ellipsis " ▾ "
+        org-startup-with-inline-images t
+        org-image-actual-width '(600))
+  (add-to-list 'org-capture-templates
+               '("j" "Journal" entry
+                 (file+olp+datetree "journal.org")
+                 "* %U %?\n%i" :prepend t :kill-buffer t)))
+#+end_src
+
+** Popups
+Agenda and capture open in a large, selected bottom popup instead of a sliver.
+
+#+begin_src emacs-lisp
+(set-popup-rule! "^\\*Org Agenda" :side 'bottom :size 0.90 :select t :ttl nil)
+(set-popup-rule! "^CAPTURE.*\\.org$" :side 'bottom :size 0.90 :select t :ttl nil)
+#+end_src
+
+** Super agenda
+The agenda is grouped into Today / Due today / Important / Overdue / Due soon.
+
+#+begin_src emacs-lisp
+(use-package! org-super-agenda
+  :after org-agenda
+  :config
+  (setq org-super-agenda-groups
+        '((:name "Today"      :time-grid t :scheduled today)
+          (:name "Due today"  :deadline today)
+          (:name "Important"  :priority "A")
+          (:name "Overdue"    :deadline past)
+          (:name "Due soon"   :deadline future)))
+  (org-super-agenda-mode 1))
+#+end_src
+
+** KOMA letters
+The KOMA-Script letter exporter (=SPC m e=, then =k=) ships with Org but is not
+loaded by default. Letter files use =#+LCO=, backaddress and so on.
+
+#+begin_src emacs-lisp
+(after! ox
+  (require 'ox-koma-letter))
+#+end_src
+
+* TRAMP
+Default to =sshx=, which opens remote files with =/bin/sh -i= as the ssh
+RemoteCommand and so bypasses the login shell. The plain =ssh= method parses
+the login shell's prompt and hangs on hosts with oh-my-zsh/p10k or a =TERM=
+export. =/ssh:= paths still work; this only changes the default and bare
+=/host:= paths.
+
+=sshx= forces a pty, and GNU coreutils ≥ 9 quotes =readlink=/=ls= output when
+stdout is a tty. TRAMP then escapes those quotes and fails on any file name
+with a space ("Encoding remote file failed"). Literal quoting turns that off.
+
+#+begin_src emacs-lisp
+(after! tramp
+  (setq tramp-default-method "sshx")
+  (add-to-list 'tramp-remote-process-environment "QUOTING_STYLE=literal"))
+#+end_src
+
+* Machine-local overrides
+=config.local.el= is untracked (see =.gitignore=), like =~/.zshrc.local=. It
+holds per-machine settings and anything personal, e.g.:
+
+#+begin_src emacs-lisp :tangle no
+(setq user-full-name "Your Name"
+      user-mail-address "you@example.com")
+#+end_src
+
+It loads last so it can override everything above.
+
+#+begin_src emacs-lisp
+(let ((local (expand-file-name "config.local.el" doom-user-dir)))
+  (when (file-exists-p local)
+    (load local)))
+#+end_src
