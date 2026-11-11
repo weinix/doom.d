@@ -134,5 +134,9 @@
         org-plantuml-executable-path
         (or (executable-find "plantuml") "plantuml"))
 
+  ;; Don't ask before evaluating diagram blocks (they only render images).
+  (setq org-confirm-babel-evaluate
+        (lambda (lang _body) (not (member lang '("dot" "plantuml")))))
+
   ;; Keep diagram output reasonably sized.
   (setq org-image-actual-width 500))
