@@ -95,11 +95,25 @@
 ;; Graphics setup must run after kkp's async Kitty Keyboard Protocol handshake
 ;; on `tty-setup-hook' (kitty-graphics.el issue #33); otherwise partial kkp setup
 ;; breaks modifiers and motion keys session-wide.
+(defun my/kitty-graphics-refresh-org-previews ()
+  "Re-run Org link previews after kitty-graphics becomes active.
+Startup `#+STARTUP: linkpreviews' can run before `kitty-graphics-setup',
+which leaves previews empty in `emacs -nw' even though PNGs exist."
+  (when (and kitty-graphics-mode (not (display-graphic-p)))
+    (dolist (buf (buffer-list))
+      (when (and (buffer-live-p buf)
+                 (with-current-buffer buf (derived-mode-p 'org-mode)))
+        (with-current-buffer buf
+          (ignore-errors (org-link-preview-refresh)))))))
+
 (defun my/kitty-graphics-setup-safe ()
   (unless (bound-and-true-p my/kitty-graphics-setup-done)
     (setq my/kitty-graphics-setup-done t)
     (require 'kitty-graphics)
-    (kitty-graphics-setup)))
+    (kitty-graphics-setup)
+    (run-with-idle-timer 0.5 nil #'my/kitty-graphics-refresh-org-previews)
+    (unless (or (display-graphic-p) kitty-graphics-mode)
+      (message "kitty-graphics: mode is OFF (no inline images). Run M-x kitty-graphics-doctor — over SSH use `kitten ssh` or export Kitty env (KITTY_WINDOW_ID)."))))
 
 (with-eval-after-load 'kkp
   (add-hook 'kkp-terminal-setup-complete-hook #'my/kitty-graphics-setup-safe))
@@ -114,6 +128,39 @@
 (use-package! kitty-graphics
   :if (not (display-graphic-p))
   :defer t)
+
+;; Org 9.8+ passes REFRESH as a 2nd arg to `org-display-inline-images'; stock
+;; kitty-graphics advice applies all args to a 3-arg TTY helper (arity error).
+(after! kitty-graphics
+  ;; Herdr panes do not expose KITTY_* env, but Herdr forwards Kitty graphics
+  ;; escapes from pane apps to the outer Kitty terminal (see herdr terminal.kitty_graphics).
+  (defun my/inside-herdr-pane-p (&optional frame)
+    (when-let* ((frame (or frame (selected-frame)))
+                (val (kitty-graphics--frame-getenv "HERDR_ENV" frame)))
+      (member val '("1" "true" "yes" "on"))))
+  (defadvice! my/kitty-graphics-detect-herdr-a (fn)
+    :around #'kitty-graphics--kitty-detect
+    (or (my/inside-herdr-pane-p) (funcall fn)))
+  (defun kitty-graphics--org-display-advice (orig-fn &rest args)
+    (if (and kitty-graphics-mode (not (display-graphic-p)))
+        (let* ((include-linked (nth 0 args))
+               (refresh (nth 1 args))
+               (beg (nth 2 args))
+               (end (nth 3 args)))
+          (when refresh
+            (kitty-graphics-remove-images beg end))
+          (kitty-graphics--org-display-inline-images-tty include-linked beg end))
+      (apply orig-fn args)))
+  ;; Org 10 + `#+STARTUP: linkpreviews' uses `org-link-preview-region', not
+  ;; `org-display-inline-images'.  Stock advice ignored REFRESH and could leave
+  ;; stale overlays after `C-c C-c'.
+  (defun kitty-graphics--org-link-preview-region-advice (orig-fn &optional include-linked refresh beg end)
+    (if (and kitty-graphics-mode (not (display-graphic-p)))
+        (progn
+          (when refresh
+            (kitty-graphics-remove-images beg end))
+          (kitty-graphics--org-display-inline-images-tty include-linked beg end))
+      (funcall orig-fn include-linked refresh beg end))))
 
 ;; kitty-graphics replaces `image-mode' with `kitty-graphics-image-mode' and
 ;; uses `special-mode-map'; evil-collection does not cover either mode, so Evil
@@ -139,4 +186,16 @@
         (lambda (lang _body) (not (member lang '("dot" "plantuml")))))
 
   ;; Keep diagram output reasonably sized.
-  (setq org-image-actual-width 500))
+  (setq org-image-actual-width 500)
+
+  ;; Doom calls obsolete `org-display-inline-images' after babel; on a tty that
+  ;; function is a no-op unless kitty-graphics intercepts.  Org 10 uses link
+  ;; previews (`diagram.org' has `#+STARTUP: linkpreviews').
+  (defadvice! my/org-babel-refresh-diagram-previews-a
+      (:override +org-redisplay-inline-images-in-babel-result-h)
+    (unless (or (bound-and-true-p org-export-current-backend)
+                (string-match-p "^ \\*temp" (buffer-name)))
+      (save-excursion
+        (when-let* ((beg (org-babel-where-is-src-block-result))
+                    (end (progn (goto-char beg) (forward-line) (org-babel-result-end))))
+          (org-link-preview-region nil t (min beg end) (max beg end)))))))
