@@ -44,6 +44,12 @@ font is what =SPC t b= switches to for presenting.
 (setq doom-big-font (font-spec :family "JetBrainsMono Nerd Font" :size 28 :weight 'light))
 #+end_src
 
+** Rainbow delimiters
+Colour each nesting level of brackets differently, in code buffers only.
+#+begin_src emacs-lisp
+(use-package! rainbow-delimiters
+  :hook (prog-mode . rainbow-delimiters-mode))
+#+end_src
 * Shell and projects
 #+begin_src emacs-lisp
 (setq explicit-shell-file-name "/bin/zsh"
@@ -65,13 +71,14 @@ mid-export, leaking doc-view refresh timers.
 (setq dired-dwim-target t)
 #+end_src
 
-* Org
+* ORG MODE
 ** Directories and agenda
 #+begin_src emacs-lisp
 (setq org-directory "~/workspace/org/")
 (after! org
   (setq org-agenda-files '("~/gtd" "~/workspace/org/")))
 #+end_src
+
 
 ** GTD
 [[https://github.com/Trevoke/org-gtd.el][org-gtd]] implements inbox → clarify → organize → engage, with org-edna for
@@ -144,7 +151,8 @@ Serif body text in org (from =:ui zen=); code and tables stay monospace.
         org-startup-with-inline-images t
         org-image-actual-width '(600))
   (add-to-list 'org-capture-templates
-               '("j" "Journal" entry
+               '(
+                 "j" "Journal" entry
                  (file+olp+datetree "journal.org")
                  "* %U %?\n%i" :prepend t :kill-buffer t)))
 #+end_src

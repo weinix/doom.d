@@ -8,6 +8,9 @@
       doom-variable-pitch-font (font-spec :family "Noto Serif" :size 13))
 (setq doom-big-font (font-spec :family "JetBrainsMono Nerd Font" :size 28 :weight 'light))
 
+(use-package! rainbow-delimiters
+  :hook (prog-mode . rainbow-delimiters-mode))
+
 (setq explicit-shell-file-name "/bin/zsh"
       shell-file-name "zsh")
 
@@ -57,7 +60,8 @@
         org-startup-with-inline-images t
         org-image-actual-width '(600))
   (add-to-list 'org-capture-templates
-               '("j" "Journal" entry
+               '(
+                 "j" "Journal" entry
                  (file+olp+datetree "journal.org")
                  "* %U %?\n%i" :prepend t :kill-buffer t)))
 
